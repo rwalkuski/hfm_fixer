@@ -3,17 +3,39 @@ import pandas as pd
 from tabulate import tabulate
 import numpy as np
 from io import StringIO
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
 
 sg.theme('SystemDefaultForReal')
 desired_columns = ["rl_w", "fr_w", "nmot_w"]
 
 col_left = [[sg.Text('Load HFM base map:'),sg.Button('Load',key='-INPUT_MAP-')],
             [sg.Text('Load LOG from ME7 Logger:'),sg.Button('Load',key='-LOG-')],
-                     [sg.Button('start',key='-START-')]]
-col_right = [[sg.Multiline('',key='-BASE-',size=(95,14),reroute_cprint=True,font={'Courier',8},autoscroll=True)]]
+                     [sg.Button('start',key='-START-')],
+                     [sg.Button('plot',key='-PLOT-')]]
+col_right = [[sg.Text('Base map:')],
+             [sg.Multiline('',key='-BASE-',size=(110,16),reroute_cprint=True,font={'Courier',7},autoscroll=True)],
+             [sg.Text('Output:')],
+             [sg.Multiline('',key='-OUTPUT-',size=(110,16),reroute_cprint=True,font={'Courier',7},autoscroll=True)],
+             ]
 
 layout = [ [sg.Column(col_left),sg.VerticalSeparator(),sg.Column(col_right)]
             ]
+
+def plot_3d(input:pd.DataFrame):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d') 
+    X,Y = np.meshgrid(input.columns.astype(float), input.index.astype(float))
+    Z = input.values.astype(float)
+    plot = ax.plot_surface(X, Y, Z, cmap=cm.jet, linewidth=0.1, antialiased=True)
+    fig.colorbar(plot, shrink=0.5, aspect=5)
+    ax.set_title('HFM Heatmap')
+    ax.set_xlabel('rl_w (load)')
+    ax.set_ylabel('nmot_w (rpm)')
+    ax.set_zlabel('fr_w (%)')
+    plt.show()
+
 
 def stick(value, target):
     value = np.array(value)  
@@ -59,7 +81,7 @@ def open_log(input):
 
 def main():
     window = sg.Window('Window Title', layout,finalize=True)
-
+    plot=False
     while True:
         event, values = window.read()
 
@@ -71,7 +93,7 @@ def main():
             base = clean_df(base)
             
             window['-BASE-'].update('')
-            sg.cprint(tabulate(base,headers='keys',tablefmt='psql'),font='Courier 9')
+            sg.cprint(tabulate(base,headers='keys',tablefmt='psql'),key='-BASE-',font='Courier 9')
         elif event == '-LOG-':
             log_file = sg.popup_get_file('Load log file',multiple_files=False)
             log = open_log(log_file)
@@ -81,10 +103,18 @@ def main():
             interpolated_df['weighted_fr_w']=interpolated_df['weighted_fr_w']/interpolated_df['weight']
             output = interpolated_df.pivot_table(values='weighted_fr_w',index='nearest_rpm',columns='nearest_load').fillna(1)
             output = clean_df(output)
-            print('logs:')
-            print(output.reindex(base.index).round(2))
-            print('outcome:')
-            print((base*output.reindex(base.index).fillna(base)).round(2))
+            #print('logs:')
+            #print(output.reindex(base.index).round(2))
+            #print('outcome:')
+            output = (base*output.reindex(base.index).fillna(base)).round(2)
+            sg.cprint(tabulate(output,headers='keys',tablefmt='psql'),key='-OUTPUT-',font='Courier 9')
+            plot=True
+        elif event == '-PLOT-':
+            if plot:
+                plot_3d(output)
+            else:
+                sg.popup_error('No output to plot')
+
 
         if event == sg.WIN_CLOSED or event == 'end':
             window.close()

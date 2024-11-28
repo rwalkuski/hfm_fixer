@@ -5,6 +5,7 @@ import numpy as np
 from io import StringIO
 
 sg.theme('SystemDefaultForReal')
+desired_columns = ["rl_w", "fr_w", "nmot_w"]
 
 col_left = [[sg.Text('Load HFM base map:'),sg.Button('Load',key='-INPUT_MAP-')],
             [sg.Text('Load LOG from ME7 Logger:'),sg.Button('Load',key='-LOG-')],
@@ -22,12 +23,38 @@ def stick(value, target):
     nearest_distance = distances[nearest_index]
     return nearest_value, nearest_distance
 
-def get_rpm_load(input):
+def get_rpm_load(input:pd.DataFrame) -> list:
     load,rpm = list(map(float,input.columns)),list(map(float,input.index))
     return[rpm,load]
 
-def find_nearest(df,log,rpm,load):
-    pass
+def clean_df(input:pd.DataFrame)    -> pd.DataFrame:
+    input.columns.name,input.index.name='rl_w','nmot_w' ##rl_w = load (x-axis), nmot_w = rpm (y-axis)
+    input.columns,input.index = input.columns.astype(float).map(lambda x: f"{x:.2f}"),input.index.astype(float).map(lambda x: f"{x:.2f}")
+    return(input)
+
+def clean_log(input:pd.DataFrame,rpm_load:list)   -> pd.DataFrame:
+    input.columns = input.columns.str.strip()
+    input=input[desired_columns].astype(float)
+    input['nearest_load'], input['load_distance'] = zip(*input['rl_w'].apply(lambda val: stick(rpm_load[1], val)))
+    input['nearest_rpm'], input['rpm_distance'] = zip(*input['nmot_w'].apply(lambda val: stick(rpm_load[0], val)))
+    input['rpm_distance']=input['rpm_distance']/1000
+    input['load_distance']=input['load_distance']/10
+    input['weight'] = 1 / (input['load_distance'] + input['rpm_distance'] + 1) 
+    input['weighted_fr_w']=input['fr_w']*input['weight']
+    return(input)
+
+def open_log(input):
+    header_line=None
+    csv_lines=[]
+    with open(input,'rb') as log:
+        for i,line in enumerate(log):
+            decoded_line = line.decode('ISO-8859-1',errors='replace')
+            if 'TimeStamp' in decoded_line:
+                header_line=i
+            if header_line is not None:
+                csv_lines.append(decoded_line)
+        csv_lines='\n'.join(csv_lines)     
+    return(pd.read_csv(StringIO(csv_lines)).drop([0,1],axis=0))
 
 
 def main():
@@ -41,36 +68,23 @@ def main():
         elif event == '-INPUT_MAP-':
             base_csv = sg.popup_get_file('Load base map', multiple_files=False)
             base = pd.read_csv(base_csv,index_col=0,dtype=float)
-            rpm_load = get_rpm_load(base)
+            base = clean_df(base)
+            
             window['-BASE-'].update('')
             sg.cprint(tabulate(base,headers='keys',tablefmt='psql'),font='Courier 9')
         elif event == '-LOG-':
             log_file = sg.popup_get_file('Load log file',multiple_files=False)
-            header_line=-1
-            csv_header=''
-            csv_lines=list()
-            with open(log_file,'rb') as log:
-                for i,line in enumerate(log):
-                    decoded_line = line.decode('ISO-8859-1',errors='replace')
-                    if 'TimeStamp' in decoded_line:
-                        csv_header = decoded_line
-                        header_line=i
-                    if header_line != -1:
-                        csv_lines.append(decoded_line)
-            csv_lines='\n'.join(csv_lines)
-            desired_columns = ["rl_w", "fr_w", "nmot_w"]
-            log = pd.read_csv(StringIO(csv_lines)).drop([0,1],axis=0)
-            log.columns = log.columns.str.strip()
-            log=log[desired_columns].astype(float)
-            log['nearest_load'], log['load_distance'] = zip(*log['rl_w'].apply(lambda val: stick(rpm_load[1], val)))
-            log['nearest_rpm'], log['rpm_distance'] = zip(*log['nmot_w'].apply(lambda val: stick(rpm_load[0], val)))
-            log['rpm_distance']=log['rpm_distance']/1000
-            log['load_distance']=log['load_distance']/10
-            log['weight'] = 1 / (log['load_distance'] + log['rpm_distance'] + 1) 
-            
-            interpolated_df = log[['fr_w', 'nmot_w', 'rl_w', 'nearest_rpm', 'nearest_load', 'load_distance','rpm_distance','weight']]
+            log = open_log(log_file)
+            log = clean_log(log,get_rpm_load(base))
 
-            interpolated_df.to_csv('interp.csv')
+            interpolated_df = log[['nearest_rpm', 'nearest_load', 'weighted_fr_w', 'weight']].groupby(['nearest_rpm','nearest_load']).sum().reset_index()
+            interpolated_df['weighted_fr_w']=interpolated_df['weighted_fr_w']/interpolated_df['weight']
+            output = interpolated_df.pivot_table(values='weighted_fr_w',index='nearest_rpm',columns='nearest_load').fillna(1)
+            output = clean_df(output)
+            print('logs:')
+            print(output.reindex(base.index).round(2))
+            print('outcome:')
+            print((base*output.reindex(base.index).fillna(base)).round(2))
 
         if event == sg.WIN_CLOSED or event == 'end':
             window.close()

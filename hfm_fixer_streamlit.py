@@ -160,12 +160,12 @@ def main():
             cm = sns.color_palette("icefire", as_cmap=True)
 
             smoothed_data = gaussian_filter(output, sigma=sigma)
-            smoothed_df = pd.DataFrame(smoothed_data,index=output.index, columns=output.columns).round(4)
+            smoothed_df = pd.DataFrame(smoothed_data,index=output.index, columns=output.columns).round(4).astype('float64')
             diff = smoothed_df-base
             max_abs_diff = diff.abs().max().max()
             norm = plt.Normalize(vmin=-max_abs_diff, vmax=max_abs_diff)
-            styled_df = smoothed_df.style.format(precision=4).apply(lambda row: [apply_cmap(val, diff_val,cm,norm) for val, diff_val in zip(row, diff.loc[row.name])],axis=1)
-
+            styled_df = smoothed_df.applymap(lambda x: f"{x:.4f}")
+            styled_df = styled_df.style.format(precision=4).apply(lambda row: [apply_cmap(val, diff_val,cm,norm) for val, diff_val in zip(row, diff.loc[row.name])],axis=1)
             st.dataframe(styled_df)
             st.text('Smooth data if needed')
             sigma = st.slider('Smoothness level',min_value=0.0,max_value=1.0,key='sigma')

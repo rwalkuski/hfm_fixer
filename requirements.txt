@@ -1,7 +1,6 @@
 streamlit
 pandas
 numpy
-io
 matplotlib
 scipy
 seaborn

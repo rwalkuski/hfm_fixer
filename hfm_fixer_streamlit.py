@@ -72,7 +72,7 @@ def apply_cmap(val, diff, cmap, norm):
     return f"background-color: rgba({r},{g},{b},1); color: {text_color}"
 
 def main():
-    st.set_page_config(layout='wide')
+    st.set_page_config(layout='wide',page_title='KFKHFM adjuster tool')
     st.title("KFKHFM adjuster tool")
 
     st.markdown(

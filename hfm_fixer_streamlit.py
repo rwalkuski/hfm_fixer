@@ -8,9 +8,6 @@ from scipy.ndimage import gaussian_filter
 import seaborn as sns
 
 
-
-        
-
 def clean_df(input:pd.DataFrame)    -> pd.DataFrame:
     input.columns.name,input.index.name='rl_w','nmot_w' ##rl_w = load (x-axis), nmot_w = rpm (y-axis)
     input.columns,input.index = input.columns.astype(float).map(lambda x: f"{x:.2f}"),input.index.astype(float).map(lambda x: f"{x:.2f}")
@@ -85,9 +82,9 @@ def main():
             width: 890px !important;
             height: 80vh;
         }
-        thead th svg {
-        display: none !important;
-         }
+        header {visibility: hidden;}
+        .streamlit-footer {display: none;}
+        div.block-container {padding-top:1rem;}
         </style>
         """, unsafe_allow_html=True)
 

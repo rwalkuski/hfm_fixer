@@ -95,6 +95,8 @@ def main():
     with column_left:
         uploadedbase = st.file_uploader('Upload KFKHFM base map', type=['csv'],accept_multiple_files=False,key="baseUploader")
         uploadedlog = st.file_uploader('Upload ME7Logger file', type=['csv'],accept_multiple_files=False)
+        status = st.container()
+
 
 
     if 'base' not in st.session_state:
@@ -164,11 +166,15 @@ def main():
             diff = smoothed_df-base
             max_abs_diff = diff.abs().max().max()
             norm = plt.Normalize(vmin=-max_abs_diff, vmax=max_abs_diff)
-            styled_df = smoothed_df.applymap(lambda x: f"{x:.4f}")
-            styled_df = styled_df.style.format(precision=4).apply(lambda row: [apply_cmap(val, diff_val,cm,norm) for val, diff_val in zip(row, diff.loc[row.name])],axis=1)
-            st.dataframe(styled_df)
+            smoothed_df = smoothed_df.map(lambda x: f"{x:.4f}")
+            styled_df = smoothed_df.style.format(precision=4).apply(lambda row: [apply_cmap(val, diff_val,cm,norm) for val, diff_val in zip(row, diff.loc[row.name])],axis=1)
+            st.markdown('<div id="scroll-target"></div>', unsafe_allow_html=True)
+            st.dataframe(styled_df,use_container_width=True)
             st.text('Smooth data if needed')
             sigma = st.slider('Smoothness level',min_value=0.0,max_value=1.0,key='sigma')
+            st.text('Paste below to TunerPro')
+            st.code(smoothed_df.to_csv(sep='\t',index=False,header=False),language=None)
+            status.success('Done! Scroll down to see the output table.', icon='✅')
 
 if __name__ == '__main__':
     main()
